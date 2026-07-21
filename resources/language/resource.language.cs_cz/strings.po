@@ -1,0 +1,22 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "#30000"
+msgid "General"
+msgstr "Obecné"
+
+msgctxt "#30001"
+msgid "Prefer original title as display title"
+msgstr "Upřednostnit původní název jako zobrazovaný"
+
+msgctxt "#30002"
+msgid "Maximum artwork per type"
+msgstr "Maximální počet obrázků na typ"
+
+msgctxt "#30003"
+msgid "Cache lifetime (days)"
+msgstr "Doba platnosti mezipaměti (dny)"
+
+msgctxt "#30004"
+msgid "Enable debug logging"
+msgstr "Zapnout ladicí protokolování"

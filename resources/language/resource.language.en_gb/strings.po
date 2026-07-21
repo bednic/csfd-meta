@@ -1,0 +1,22 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "#30000"
+msgid "General"
+msgstr ""
+
+msgctxt "#30001"
+msgid "Prefer original title as display title"
+msgstr ""
+
+msgctxt "#30002"
+msgid "Maximum artwork per type"
+msgstr ""
+
+msgctxt "#30003"
+msgid "Cache lifetime (days)"
+msgstr ""
+
+msgctxt "#30004"
+msgid "Enable debug logging"
+msgstr ""
