@@ -1,12 +1,15 @@
+import os
 import pytest
 
 pytestmark = pytest.mark.network
+
+RELAY_URL = os.environ.get("CSFD_RELAY_URL", "http://nas:9753")
 
 
 @pytest.fixture(scope="module")
 def client():
     from csfd.client import CsfdClient
-    return CsfdClient(cache_dir=None, min_interval=1.0)
+    return CsfdClient(RELAY_URL, cache_dir=None)
 
 
 def test_search_live(client):
