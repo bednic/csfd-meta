@@ -25,20 +25,52 @@ _HEADERS = {
 }
 
 
+def _keepalive_session():
+    """A requests.Session whose sockets have TCP keep-alive enabled, so the
+    connection survives the brief idle wait between fetching an Anubis challenge
+    and submitting it. Anubis binds the challenge to the connection; if the
+    socket drops during the wait the reconnect fails the proof ("invalid
+    response"). Falls back to a plain session if the adapter can't be built."""
+    import socket
+    import requests
+    from requests.adapters import HTTPAdapter
+
+    opts = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
+    for name, value in (("TCP_KEEPIDLE", 1), ("TCP_KEEPINTVL", 1), ("TCP_KEEPCNT", 8)):
+        num = getattr(socket, name, None)
+        if num is not None:
+            opts.append((socket.IPPROTO_TCP, num, value))
+
+    class _KeepAliveAdapter(HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            kwargs["socket_options"] = opts
+            return super().init_poolmanager(*args, **kwargs)
+
+    session = requests.Session()
+    try:
+        adapter = _KeepAliveAdapter()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+    except Exception:
+        pass
+    return session
+
+
 class CsfdClient:
     def __init__(self, cache_dir=None, ttl_seconds=604800, min_interval=1.0,
-                 sleep=time.sleep, session=None, max_solve_attempts=3):
+                 sleep=time.sleep, session=None, max_solve_attempts=3,
+                 min_solve_seconds=1.5):
         self._cache_dir = cache_dir
         self._ttl = ttl_seconds
         self._min_interval = min_interval
         self._sleep = sleep
         self._last_request = 0.0
         self._max_solve_attempts = max_solve_attempts
+        self._min_solve_seconds = min_solve_seconds
         if session is not None:
             self._session = session
         else:
-            import requests
-            self._session = requests.Session()
+            self._session = _keepalive_session()
         if cache_dir:
             os.makedirs(cache_dir, exist_ok=True)
 
@@ -104,9 +136,14 @@ class CsfdClient:
             ch = anubis.parse_challenge(html)
             issued_ip = ch["metadata"].get("X-Real-Ip")
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
-            # Report the ACTUAL time spent, not a hardcoded value. Anubis rejects
-            # "insufficent time" when the claimed elapsedTime exceeds the real time
-            # since the challenge was issued (we can't claim 1000ms if ~150ms passed).
+            # Anubis rejects "insufficent time" when too little real wall-clock
+            # time passed between issuing the challenge and submitting it (our
+            # pure-Python solve is sub-millisecond). Wait out a human-plausible
+            # minimum, on the SAME keep-alive connection (TCP keep-alive holds the
+            # socket open so the proof isn't invalidated by a reconnect).
+            wait = self._min_solve_seconds - (time.time() - issued_at)
+            if wait > 0:
+                self._sleep(wait)
             elapsed_ms = max(1, int((time.time() - issued_at) * 1000))
             log.warning(
                 "anubis: solving id=%s difficulty=%s issued X-Real-Ip=%s "

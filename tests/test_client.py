@@ -82,15 +82,17 @@ class ScriptedAnubisSession:
 
 def test_get_solves_anubis_trap_and_returns_real_page():
     s = ScriptedAnubisSession()
-    c = CsfdClient(cache_dir=None, session=s, min_interval=0)
+    c = CsfdClient(cache_dir=None, session=s, min_interval=0,
+                   sleep=lambda n: None)
     html = c.get("https://www.csfd.cz/film/9499/")
     assert "<h1>Matrix</h1>" in html
     assert any("pass-challenge" in u for u in s.calls)
 
 
-def test_pass_challenge_not_throttled_after_challenge_fetch():
-    """The pass-challenge must ride the same connection as the challenge fetch:
-    no throttle sleep between them, or Anubis rejects the changed fingerprint."""
+def test_pass_challenge_waits_min_solve_time_then_submits():
+    """Anubis rejects "insufficent time" if we submit too fast, and "invalid
+    response" if the connection drops. So the pass-challenge must be preceded by
+    the minimum-solve wait (satisfying the timing gate) and nothing else."""
     timeline = []
 
     class TimelineSession:
@@ -109,13 +111,14 @@ def test_pass_challenge_not_throttled_after_challenge_fetch():
                     + _json.dumps(ch) + "</script>")
             return FakeResponse("<html><h1>Matrix</h1></html>")
 
-    c = CsfdClient(cache_dir=None, session=TimelineSession(), min_interval=2.0,
+    c = CsfdClient(cache_dir=None, session=TimelineSession(), min_interval=0,
+                   min_solve_seconds=0.5,
                    sleep=lambda n: timeline.append(("sleep", n)))
     c.get("https://www.csfd.cz/film/1/")
-    events = [kind for kind, _ in timeline]
     pass_idx = next(i for i, (k, u) in enumerate(timeline)
                     if k == "get" and "pass-challenge" in u)
-    assert events[pass_idx - 1] == "get"  # the challenge fetch, not a sleep
+    kind, val = timeline[pass_idx - 1]
+    assert kind == "sleep" and val >= 0.4  # the minimum-solve wait, ~0.5s
 
 
 def test_get_raises_when_anubis_never_passes():
@@ -130,6 +133,6 @@ def test_get_raises_when_anubis_never_passes():
                 + _json.dumps(challenge) + "</script>")
     import pytest
     c = CsfdClient(cache_dir=None, session=AlwaysTrap(), min_interval=0,
-                   max_solve_attempts=2)
+                   max_solve_attempts=2, sleep=lambda n: None)
     with pytest.raises(_anubis.AnubisError):
         c.get("https://www.csfd.cz/film/1/")
