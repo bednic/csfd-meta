@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<addon id="metadata.csfd" name="CSFD" version="0.1.1" provider-name="Tomas Benedikt"
+<addon id="metadata.csfd" name="CSFD" version="0.1.2" provider-name="Tomas Benedikt"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema"
        xsi:noNamespaceSchemaLocation="https://github.com/xbmc/xbmc/blob/master/addons/xbmc.addon/metadata.xsd">
   <requires>
