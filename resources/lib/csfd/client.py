@@ -100,16 +100,21 @@ class CsfdClient:
         attempts = 0
         while anubis.is_trap(html) and attempts < self._max_solve_attempts:
             attempts += 1
+            issued_at = time.time()
             ch = anubis.parse_challenge(html)
             issued_ip = ch["metadata"].get("X-Real-Ip")
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
+            # Report the ACTUAL time spent, not a hardcoded value. Anubis rejects
+            # "insufficent time" when the claimed elapsedTime exceeds the real time
+            # since the challenge was issued (we can't claim 1000ms if ~150ms passed).
+            elapsed_ms = max(1, int((time.time() - issued_at) * 1000))
             log.warning(
                 "anubis: solving id=%s difficulty=%s issued X-Real-Ip=%s "
-                "randomData=%s nonce=%s response=%s",
+                "randomData=%s nonce=%s response=%s elapsed_ms=%s",
                 ch["id"], ch["difficulty"], issued_ip,
-                ch["random_data"], nonce, response_hash)
+                ch["random_data"], nonce, response_hash, elapsed_ms)
             pass_url = anubis.pass_challenge_url(
-                BASE_URL, ch["id"], response_hash, nonce, url)
+                BASE_URL, ch["id"], response_hash, nonce, url, elapsed_ms=elapsed_ms)
             try:
                 # Submit immediately, with NO throttle sleep, so the pass-challenge
                 # rides the SAME keep-alive connection as the challenge fetch.
