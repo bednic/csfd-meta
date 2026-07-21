@@ -5,7 +5,7 @@
     <import addon="xbmc.metadata" version="2.1.0"/>
     <import addon="script.module.requests" version="2.31.0"/>
     <import addon="script.module.beautifulsoup4" version="4.12.2"/>
-    <import addon="script.module.certifi" version="2023.7.22"/>
+    <import addon="script.module.certifi" version="2023.5.7"/>
   </requires>
   <extension point="xbmc.metadata.scraper.movies" library="addon_movie.py" language="cz"/>
   <extension point="xbmc.metadata.scraper.tvshows" library="addon_tv.py" language="cz"/>
