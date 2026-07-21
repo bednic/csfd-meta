@@ -52,6 +52,20 @@ def test_pass_challenge_url_has_all_params():
         assert frag in url
 
 
+def test_error_reason_extracts_message_without_markup():
+    body = ('<!doctype html><html><head><title>Oh noes!</title>'
+            '<style>body{color:red}</style></head><body>'
+            '<h1>Oh noes!</h1><p>invalid response.</p></body></html>')
+    reason = anubis.error_reason(body)
+    assert "invalid response." in reason
+    assert "<" not in reason and "color" not in reason
+
+
+def test_error_reason_none_for_empty():
+    assert anubis.error_reason("") is None
+    assert anubis.error_reason(None) is None
+
+
 def test_solve_raises_when_uncapped_target_unreachable():
     with pytest.raises(anubis.AnubisError):
         # 16 leading zero hex digits is unreachable in a tiny budget

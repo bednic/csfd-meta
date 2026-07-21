@@ -55,6 +55,17 @@ def solve(random_data, difficulty, max_iterations=8_000_000):
         f"(difficulty {difficulty})")
 
 
+def error_reason(html, limit=200):
+    """Extract the human-readable reason from an Anubis 'Oh noes!' error page
+    (e.g. 'invalid response.'), stripping style/script blocks and tags."""
+    if not html:
+        return None
+    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:limit] or None
+
+
 def pass_challenge_url(base_url, challenge_id, response, nonce, redir, elapsed_ms=1000):
     qs = urlencode({
         "id": challenge_id, "response": response, "nonce": nonce,

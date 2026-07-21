@@ -101,19 +101,30 @@ class CsfdClient:
             attempts += 1
             ch = anubis.parse_challenge(html)
             issued_ip = ch["metadata"].get("X-Real-Ip")
-            log.warning("anubis: solving challenge id=%s difficulty=%s "
-                        "issued X-Real-Ip=%s", ch["id"], ch["difficulty"], issued_ip)
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
+            log.warning(
+                "anubis: solving id=%s difficulty=%s issued X-Real-Ip=%s "
+                "randomData=%s nonce=%s response=%s",
+                ch["id"], ch["difficulty"], issued_ip,
+                ch["random_data"], nonce, response_hash)
             pass_url = anubis.pass_challenge_url(
                 BASE_URL, ch["id"], response_hash, nonce, url)
             try:
                 self._raw_get(pass_url)   # session cookie jar captures the auth cookie
             except Exception as exc:
+                resp = getattr(exc, "response", None)
+                status = getattr(resp, "status_code", None)
+                reason = anubis.error_reason(resp.text) if resp is not None else None
                 recheck_ip = self._probe_real_ip(url)
+                import requests as _rq
                 log.warning(
-                    "anubis: pass-challenge REJECTED (%s); issued X-Real-Ip=%s "
-                    "recheck X-Real-Ip=%s ip_changed=%s",
-                    exc, issued_ip, recheck_ip, issued_ip != recheck_ip)
+                    "anubis: pass-challenge REJECTED status=%s reason=%r "
+                    "issued X-Real-Ip=%s recheck X-Real-Ip=%s ip_changed=%s "
+                    "cookies=[%s] requests=%s",
+                    status, reason, issued_ip, recheck_ip,
+                    issued_ip != recheck_ip,
+                    ",".join(sorted(self._session.cookies.keys())),
+                    getattr(_rq, "__version__", "?"))
                 raise
             html = self._raw_get(url)
         if anubis.is_trap(html):
