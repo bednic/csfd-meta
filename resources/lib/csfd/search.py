@@ -1,9 +1,11 @@
 import logging
 import re
+from urllib.parse import quote
+
 from bs4 import BeautifulSoup
 
 from .models import SearchResult
-from .urls import absolute_url, film_id_from_url
+from .urls import BASE_URL, absolute_url, film_id_from_url
 
 log = logging.getLogger(__name__)
 _YEAR_RE = re.compile(r"(\d{4})")
@@ -24,6 +26,9 @@ def parse_search(html):
         if not href:
             continue
         url = absolute_url(href)
+        # keep only top-level films/series; skip episode/season sub-results
+        if len(re.findall(r"/\d+-[^/]+", url)) > 1:
+            continue
         fid = film_id_from_url(url)
         if not fid or fid in seen:
             continue
@@ -52,8 +57,7 @@ def parse_search(html):
     return results
 
 
-def search(client, query, year=None):
-    from urllib.parse import quote
-    url = f"https://www.csfd.cz/hledat/?q={quote(query)}"
+def search(client, query):
+    url = f"{BASE_URL}/hledat/?q={quote(query)}"
     html = client.get(url, ttl=86400)  # short TTL for searches
     return parse_search(html)

@@ -20,3 +20,15 @@ def test_first_result_has_core_fields():
 def test_series_flagged():
     results = parse_search(load_fixture("search.html"))
     assert all(isinstance(r.is_series, bool) for r in results)
+
+
+def test_excludes_episode_subresults_and_keeps_distinct_films():
+    results = parse_search(load_fixture("search.html"))
+    ids = [r.csfd_id for r in results]
+    # no duplicate ids
+    assert len(ids) == len(set(ids))
+    # the Matrix trilogy top-level films are all present and distinct
+    assert {"9499", "9497", "9498"} <= set(ids)
+    # no result is an episode/season sub-page URL
+    import re as _re
+    assert all(len(_re.findall(r"/\d+-[^/]+", r.url)) == 1 for r in results)
