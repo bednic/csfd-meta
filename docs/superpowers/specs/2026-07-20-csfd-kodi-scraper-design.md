@@ -94,9 +94,25 @@ lxml/XPath.
 
 ## Kodi scraper flow
 
-`addon.py → router.py` parses the `action=` parameter and dispatches. All data
-crosses from `csfd/` to `kodi/` as plain dataclasses; `mapping.py` is the only
-place that touches Kodi APIs.
+Two entry scripts parse the `action=` parameter and dispatch. All data crosses
+from `csfd/` to `kodi/` as plain dataclasses; `mapping.py` is the only place that
+constructs Kodi ListItems.
+
+> **Content-type routing (corrected during implementation, 2026-07-21):** Kodi's
+> Python scraper protocol does **not** pass a `mediatype`/`content` parameter on
+> `find`/`getdetails` — verified against the official TMDB scrapers, which ship
+> as two separate movies-only / tvshows-only addons. A single addon therefore
+> cannot tell a movie `find` from a TV `find` at runtime. We keep one addon but
+> give each extension point its **own entry script**, so the content type is
+> implicit in which script Kodi ran:
+> ```
+> <extension point="xbmc.metadata.scraper.movies"  library="addon_movie.py"/>
+> <extension point="xbmc.metadata.scraper.tvshows" library="addon_tv.py"/>
+> ```
+> `addon_movie.py → router.route_movie` (find/getdetails/NfoUrl, films only);
+> `addon_tv.py → router.route_tv` (find/getdetails/NfoUrl for shows + the
+> TV-only `getepisodelist`/`getepisodedetails`). `movie_find` keeps only
+> non-series results; `tv_find` keeps only series.
 
 ### Movies
 
