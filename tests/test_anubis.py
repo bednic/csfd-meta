@@ -1,5 +1,6 @@
 import hashlib
 import json
+import pytest
 from csfd import anubis
 
 CHALLENGE = {
@@ -48,3 +49,9 @@ def test_pass_challenge_url_has_all_params():
     for frag in ["id=id9", "response=0abc", "nonce=42",
                  "redir=https%3A%2F%2Fwww.csfd.cz%2Ffilm%2F1%2F", "elapsedTime=1000"]:
         assert frag in url
+
+
+def test_solve_raises_when_uncapped_target_unreachable():
+    with pytest.raises(anubis.AnubisError):
+        # 16 leading zero hex digits is unreachable in a tiny budget
+        anubis.solve("abc", 16, max_iterations=1000)

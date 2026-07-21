@@ -41,14 +41,17 @@ def parse_challenge(html):
         raise AnubisError(f"malformed anubis challenge: {e}")
 
 
-def solve(random_data, difficulty):
+def solve(random_data, difficulty, max_iterations=8_000_000):
     prefix = "0" * difficulty
     nonce = 0
-    while True:
+    while nonce < max_iterations:
         h = hashlib.sha256(f"{random_data}{nonce}".encode()).hexdigest()
         if h[:difficulty] == prefix:
             return h, nonce
         nonce += 1
+    raise AnubisError(
+        f"Anubis PoW not solved within {max_iterations} iterations "
+        f"(difficulty {difficulty})")
 
 
 def pass_challenge_url(base_url, challenge_id, response, nonce, redir, elapsed_ms=1000):
