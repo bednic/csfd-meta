@@ -1,0 +1,9 @@
+services:
+  anubis-relay:
+    image: bednic/anubis-relay:latest
+    container_name: anubis-relay
+    restart: unless-stopped
+    ports:
+      - "9753:9753"
+    environment:
+      - PORT=9753
