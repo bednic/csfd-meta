@@ -13,9 +13,9 @@ log = logging.getLogger(__name__)
 
 
 def build_client(settings):
-    return CsfdClient(cache_dir=settings.profile_dir,
-                      ttl_seconds=settings.cache_ttl_days * 86400,
-                      min_interval=1.0)
+    return CsfdClient(settings.relay_url,
+                      cache_dir=settings.profile_dir,
+                      ttl_seconds=settings.cache_ttl_days * 86400)
 
 
 def _find(handle, params, keep):
