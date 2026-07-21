@@ -16,6 +16,8 @@
     <description lang="cs_CZ">Stahuje metadata filmů a seriálů z CSFD.cz.</description>
     <platform>all</platform>
     <license>MIT</license>
-    <assets/>
+    <assets>
+      <icon>resources/icon.png</icon>
+    </assets>
   </extension>
 </addon>
