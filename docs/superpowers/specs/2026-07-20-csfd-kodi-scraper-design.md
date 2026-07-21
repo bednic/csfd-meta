@@ -16,6 +16,18 @@ Kodi-agnostic CSFD parsing core and a thin Kodi glue layer — so parsing is ful
 unit-testable offline and a hosted backend can be swapped in later without
 touching the Kodi layer.
 
+> **Anti-bot wall (discovered during implementation, 2026-07-20):** csfd.cz is
+> fronted by **Anubis** (techaro.lol, v1.24.0), a JavaScript proof-of-work bot
+> wall. Plain HTTP fetches (and header-rotation approaches like node-csfd-api)
+> receive a trap page — "Ujišťujeme se, že nejste robot!" — not real HTML.
+> Login cookies do not help; the wall sits in front of the login page too.
+> The client defeats it by **solving the proof-of-work in pure Python** (no
+> browser, no account): parse the `anubis_challenge` JSON, brute-force a nonce
+> where `sha256(randomData + nonce)` has `difficulty` leading zero hex digits
+> (difficulty is currently 1 — a few hashes), call the `pass-challenge`
+> endpoint to obtain the `techaro.lol-anubis-auth` cookie, cache it, and retry.
+> This lives entirely inside `client.py`; the parser layer is unaffected.
+
 ## Goals & Scope
 
 ### In scope (v1)
@@ -118,12 +130,17 @@ Same `NfoUrl` / `find` / `getdetails` for the show, plus:
 
 ### `client.py`
 
-- **HTTP:** `requests` with a realistic browser `User-Agent` and
-  `Accept-Language: cs` for consistent Czech markup. ~10s timeout, 2–3 retries
-  with backoff for transient failures.
-- **Consent wall:** CSFD shows a GDPR/cookie consent interstitial to fresh
-  clients; send the consent cookie preemptively to get real pages. (Known
-  gotcha — silently breaks scrapes otherwise.)
+- **HTTP:** `requests` with a full, coherent modern-browser header set
+  (`User-Agent`, `Sec-Ch-Ua`, `Sec-Fetch-*`, `Accept`, `Accept-Language: cs-CZ`)
+  for consistent Czech markup. ~10s timeout, 2–3 retries with backoff for
+  transient failures.
+- **Anubis proof-of-work wall:** csfd.cz is fronted by Anubis. On any response
+  that is the trap page, the client parses the `anubis_challenge` JSON, solves
+  the PoW (`sha256(randomData + nonce)` with `difficulty` leading zero hex
+  digits), GETs `/.within.website/x/cmd/anubis/api/pass-challenge` with a cookie
+  jar to obtain `techaro.lol-anubis-auth`, caches that cookie, and retries the
+  original request. Pure `hashlib` — no browser, no account. Re-solves when the
+  cached auth cookie expires.
 - **Caching:** parsed results cached to
   `special://profile/addon_data/...` keyed by URL, with TTL (default ~7 days,
   configurable). Search results: short TTL; film pages: long TTL.
@@ -197,7 +214,8 @@ Kodi testing begins at step 5.
 
 - **HTML layout drift** (primary) — mitigated by fixture tests + live canary +
   defensive per-field parsing.
-- **Consent wall / bot blocking** — mitigated by consent cookie, realistic
-  headers, polite rate limiting, caching.
+- **Anubis anti-bot wall** — mitigated by the pure-Python PoW solver. Works at
+  any SHA difficulty (currently 1); would break only if CSFD switches to a
+  JS-only or "slow" challenge mode, which the live canary would flag.
 - **Sparse CSFD episode data** — mitigated by scoping TV to show-level + episode
   titles in v1.
