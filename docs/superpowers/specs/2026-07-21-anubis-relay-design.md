@@ -77,7 +77,7 @@ imports it (only the old `client.py` did).
 ### Addon: settings
 
 `resources/settings.xml` gains a `relay_url` string setting (label `#30005`),
-pre-defined with the user's NAS default `http://nas:7878`. Added to both
+pre-defined with the user's NAS default `http://nas:9753`. Added to both
 `strings.po` files. `Settings.relay_url` property returns
 `getSettingString("relay_url")`.
 
@@ -96,11 +96,11 @@ already reuses `build_client`).
   form (works on the host's normal fingerprint).
 - `relay/app.py`: stdlib `http.server` (`BaseHTTPRequestHandler`,
   `ThreadingHTTPServer`). One shared `AnubisFetcher`. Binds `0.0.0.0:PORT`
-  (`PORT` env, default `7878`).
+  (`PORT` env, default `9753`).
 - `relay/Dockerfile`: `python:3-slim`, `pip install requests` (its `certifi`
   comes as a dependency; no parsing libs — the relay does not parse HTML). Copy
   `relay/`. `CMD ["python", "app.py"]`.
-- `relay/docker-compose.yml`: port map `7878:7878`, `restart: unless-stopped`.
+- `relay/docker-compose.yml`: port map `9753:9753`, `restart: unless-stopped`.
   No volume (stateless).
 - `relay/tests/`: `test_app.py`, `test_fetcher.py`, and the relocated
   `test_anubis.py`.
@@ -160,7 +160,7 @@ already reuses `build_client`).
 - Move `anubis.py` (and its tests) from the addon to the relay.
 - Version bump (addon `0.2.0`: relay is a breaking change to how it fetches).
 - README: relay build/run on the NAS (docker compose up -d) and setting the
-  addon's Relay URL to `http://nas:7878` (the pre-filled default).
+  addon's Relay URL to `http://nas:9753` (the pre-filled default).
 
 ## Out of scope
 
