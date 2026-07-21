@@ -1,16 +1,18 @@
 VERSION := 0.1.1
 NAME := metadata.csfd
+BUILD_DIR := build
 
 .PHONY: test zip clean
 test:
 	pytest
 
 zip:
-	rm -f $(NAME)-$(VERSION).zip
-	git archive --format=zip --prefix=$(NAME)/ -o $(NAME)-$(VERSION).zip HEAD
+	mkdir -p $(BUILD_DIR)
+	rm -f $(BUILD_DIR)/$(NAME)-$(VERSION).zip
+	git archive --format=zip --prefix=$(NAME)/ -o $(BUILD_DIR)/$(NAME)-$(VERSION).zip HEAD
 
 clean:
-	rm -f $(NAME)-$(VERSION).zip
+	rm -rf $(BUILD_DIR)
 
 # Kodi expects the addon id (metadata.csfd) as the top folder inside the
 # zip, even though this working dir is named csfd-meta. `git archive` roots
