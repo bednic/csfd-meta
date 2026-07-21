@@ -21,3 +21,7 @@ msgstr "Doba platnosti mezipaměti (dny)"
 msgctxt "#30004"
 msgid "Enable debug logging"
 msgstr "Zapnout ladicí protokolování"
+
+msgctxt "#30005"
+msgid "Anubis relay URL"
+msgstr "URL Anubis relay"

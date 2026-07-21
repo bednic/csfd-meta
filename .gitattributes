@@ -8,3 +8,4 @@ Makefile         export-ignore
 pytest.ini       export-ignore
 requirements-dev.txt export-ignore
 csfd-meta.iml    export-ignore
+relay/           export-ignore
