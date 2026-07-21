@@ -1,5 +1,5 @@
 import xbmcgui
-from csfd.models import CsfdFilm, Person, Artwork
+from csfd.models import CsfdFilm, Person, Artwork, SearchResult
 from kodi.mapping import film_to_listitem
 
 
@@ -44,3 +44,14 @@ def test_cast_and_art_mapped():
     assert tag["cast"][0].role == "Neo"
     assert li.art["poster"] == "http://img/p.jpg"
     assert li.art["fanart"] == "http://img/f.jpg"
+
+
+def test_search_result_to_listitem():
+    from kodi.mapping import search_result_to_listitem
+    from csfd.models import SearchResult
+    r = SearchResult(csfd_id="42", url="u", title="Neo", year=1999, thumb="t.jpg")
+    li = search_result_to_listitem(r)
+    tag = li.getVideoInfoTag().data
+    assert tag["uniqueids"] == ({"csfd": "42"}, "csfd")
+    assert tag["year"] == 1999
+    assert li.art["thumb"] == "t.jpg"

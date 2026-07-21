@@ -1,13 +1,12 @@
 import logging
 
-import xbmcgui
 import xbmcplugin
 
 from csfd.client import CsfdClient
 from csfd.urls import absolute_url, film_id_from_url
 from csfd import search as csfd_search
 from csfd import film as csfd_film
-from .mapping import film_to_listitem
+from .mapping import film_to_listitem, search_result_to_listitem, nfo_listitem
 from .settings import Settings
 
 log = logging.getLogger(__name__)
@@ -24,17 +23,12 @@ def movie_find(handle, params):
     client = build_client(settings)
     title = params.get("title", "")
     year = params.get("year")
-    results = csfd_search.search(client, title)
-    if year and year.isdigit():
+    results = [r for r in csfd_search.search(client, title) if not r.is_series]
+    if year and str(year).isdigit():
         y = int(year)
         results.sort(key=lambda r: 0 if r.year == y else 1)
     for r in results:
-        li = xbmcgui.ListItem(r.title, offscreen=True)
-        li.getVideoInfoTag().setUniqueIDs({"csfd": r.csfd_id}, "csfd")
-        if r.year:
-            li.getVideoInfoTag().setYear(r.year)
-        if r.thumb:
-            li.setArt({"thumb": r.thumb})
+        li = search_result_to_listitem(r)
         xbmcplugin.addDirectoryItem(handle=handle, url=r.url, listitem=li,
                                     isFolder=True)
     xbmcplugin.endOfDirectory(handle)
@@ -55,7 +49,7 @@ def nfo_url(handle, params):
     if not fid:
         return
     url = absolute_url(f"/film/{fid}/")
-    li = xbmcgui.ListItem(url, offscreen=True)
+    li = nfo_listitem(url)
     xbmcplugin.addDirectoryItem(handle=handle, url=url, listitem=li,
                                 isFolder=True)
     xbmcplugin.endOfDirectory(handle)

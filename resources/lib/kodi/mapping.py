@@ -54,3 +54,20 @@ def film_to_listitem(film, prefer_original, media_type="movie"):
     if art:
         li.setArt(art)
     return li
+
+
+def search_result_to_listitem(result):
+    """Directory ListItem for one search candidate."""
+    li = xbmcgui.ListItem(result.title, offscreen=True)
+    tag = li.getVideoInfoTag()
+    tag.setUniqueIDs({"csfd": result.csfd_id}, "csfd")
+    if result.year:
+        tag.setYear(result.year)
+    if result.thumb:
+        li.setArt({"thumb": result.thumb})
+    return li
+
+
+def nfo_listitem(url):
+    """Minimal ListItem carrying a resolved CSFD url for the NfoUrl action."""
+    return xbmcgui.ListItem(url, offscreen=True)
