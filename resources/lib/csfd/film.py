@@ -86,9 +86,11 @@ def parse_film(html, url, max_art=5):
             return (None, None)
         m = _INT_RE.search(node.get_text())
         pct = int(m.group(1)) if m else None
-        votes_node = soup.select_one(".rating-average-count, .ratings-btn")
-        vm = _INT_RE.search(votes_node.get_text().replace("\xa0", "")) if votes_node else None
-        votes = int(vm.group(1)) if vm else None
+        votes_node = soup.select_one(".counter")  # rating count e.g. "(112 356)"
+        votes = None
+        if votes_node:
+            digits = re.sub(r"\D", "", votes_node.get_text())
+            votes = int(digits) if digits else None
         return (round(pct / 10.0, 1) if pct is not None else None, votes)
     rating, votes = _safe(_rating, "rating") or (None, None)
 
@@ -104,8 +106,15 @@ def parse_film(html, url, max_art=5):
         node = soup.select_one(".origin")
         if not node:
             return []
-        first = node.get_text().split(",")[0]
-        return [c.strip() for c in first.split("/") if c.strip() and not c.strip().isdigit()]
+        # countries are the leading text before the first child <span>
+        # (origin line = "Country[ / Country] • year • runtime")
+        lead = []
+        for child in node.children:
+            if getattr(child, "name", None) is not None:
+                break
+            lead.append(str(child))
+        text = "".join(lead).strip()
+        return [c.strip() for c in text.split("/") if c.strip()]
     countries = _safe(_countries, "countries") or []
 
     directors = _safe(lambda: _people(soup, ("režie", "rezie", "director")), "directors") or []
@@ -122,7 +131,8 @@ def parse_film(html, url, max_art=5):
             src = poster.get("src") or poster.get("data-src")
             if src:
                 arts.append(Artwork(url=absolute_url(src), kind="poster"))
-        for img in soup.select(".gallery-item img")[: max_art - 1]:
+        remaining = max(0, max_art - len(arts))
+        for img in soup.select(".gallery-item img")[:remaining]:
             src = img.get("src") or img.get("data-src")
             if src:
                 arts.append(Artwork(url=absolute_url(src), kind="fanart"))

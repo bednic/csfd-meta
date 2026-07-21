@@ -40,3 +40,11 @@ def test_artwork_present_and_capped():
     f = film()
     assert any(a.kind == "poster" for a in f.artwork)
     assert len(f.artwork) <= 5
+
+
+def test_countries():
+    assert film().countries == ["USA"]
+
+
+def test_votes_parsed():
+    assert film().votes == 112356
