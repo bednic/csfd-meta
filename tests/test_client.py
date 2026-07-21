@@ -112,13 +112,56 @@ def test_pass_challenge_waits_min_solve_time_then_submits():
             return FakeResponse("<html><h1>Matrix</h1></html>")
 
     c = CsfdClient(cache_dir=None, session=TimelineSession(), min_interval=0,
-                   min_solve_seconds=0.5,
+                   solve_delays=[0.5],
                    sleep=lambda n: timeline.append(("sleep", n)))
     c.get("https://www.csfd.cz/film/1/")
     pass_idx = next(i for i, (k, u) in enumerate(timeline)
                     if k == "get" and "pass-challenge" in u)
     kind, val = timeline[pass_idx - 1]
     assert kind == "sleep" and val >= 0.4  # the minimum-solve wait, ~0.5s
+
+
+def test_solve_sweeps_delays_until_pass_accepted():
+    """A rejected pass-challenge (e.g. 403 'invalid response') should not abort;
+    the client tries the next delay with a fresh challenge and stops when the
+    server accepts one."""
+    class RejectError(Exception):
+        def __init__(self, resp):
+            self.response = resp
+
+    class RejectResponse:
+        def __init__(self, text):
+            self.text = text
+        def raise_for_status(self):
+            raise RejectError(self)
+
+    ch_json = ('<script id="anubis_challenge" type="application/json">'
+               + _json.dumps({"rules": {"difficulty": 1},
+                              "challenge": {"id": "x", "randomData": "abc",
+                                            "difficulty": 1}}) + "</script>")
+
+    class SweepSession:
+        cookies = type("C", (), {"keys": staticmethod(lambda: [])})()
+        def __init__(self):
+            self.pass_attempts = 0
+            self.passed = False
+        def get(self, url, headers=None, timeout=None):
+            if "pass-challenge" in url:
+                self.pass_attempts += 1
+                if self.pass_attempts < 3:          # reject the first two delays
+                    return RejectResponse("<p>invalid response.</p>")
+                self.passed = True                  # accept the third
+                return FakeResponse("<html>ok</html>")
+            if not self.passed:
+                return FakeResponse(ch_json)
+            return FakeResponse("<html><h1>Matrix</h1></html>")
+
+    s = SweepSession()
+    c = CsfdClient(cache_dir=None, session=s, min_interval=0,
+                   solve_delays=[0.1, 0.2, 0.3, 0.4], sleep=lambda n: None)
+    html = c.get("https://www.csfd.cz/film/1/")
+    assert "<h1>Matrix</h1>" in html
+    assert s.pass_attempts == 3
 
 
 def test_get_raises_when_anubis_never_passes():
@@ -133,6 +176,6 @@ def test_get_raises_when_anubis_never_passes():
                 + _json.dumps(challenge) + "</script>")
     import pytest
     c = CsfdClient(cache_dir=None, session=AlwaysTrap(), min_interval=0,
-                   max_solve_attempts=2, sleep=lambda n: None)
+                   solve_delays=[0.1, 0.1], sleep=lambda n: None)
     with pytest.raises(_anubis.AnubisError):
         c.get("https://www.csfd.cz/film/1/")

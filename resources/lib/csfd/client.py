@@ -58,15 +58,17 @@ def _keepalive_session():
 
 class CsfdClient:
     def __init__(self, cache_dir=None, ttl_seconds=604800, min_interval=1.0,
-                 sleep=time.sleep, session=None, max_solve_attempts=3,
-                 min_solve_seconds=1.5):
+                 sleep=time.sleep, session=None, solve_delays=None):
         self._cache_dir = cache_dir
         self._ttl = ttl_seconds
         self._min_interval = min_interval
         self._sleep = sleep
         self._last_request = 0.0
-        self._max_solve_attempts = max_solve_attempts
-        self._min_solve_seconds = min_solve_seconds
+        # Anubis wants a MINIMUM real time before submit ("insufficent time") but
+        # the challenge also goes stale quickly ("invalid response"), so the valid
+        # window is narrow. Sweep several submit delays and use the first the
+        # server accepts; each is logged so the working value can be pinned.
+        self._solve_delays = solve_delays or [0.3, 0.5, 0.7, 0.9]
         if session is not None:
             self._session = session
         else:
@@ -117,64 +119,48 @@ class CsfdClient:
         self._last_request = time.time()
         return resp.text
 
-    def _probe_real_ip(self, url):
-        """Diagnostic: re-fetch a fresh challenge and return the X-Real-Ip that
-        csfd.cz reports for us right now, to detect whether our source IP
-        changed between challenge issuance and pass-challenge submission."""
-        try:
-            return anubis.parse_challenge(
-                self._raw_get(url))["metadata"].get("X-Real-Ip")
-        except Exception:
-            return None
-
     def _fetch_with_anubis(self, url):
         html = self._raw_get(url)
         attempts = 0
-        while anubis.is_trap(html) and attempts < self._max_solve_attempts:
+        while anubis.is_trap(html) and attempts < len(self._solve_delays):
+            delay = self._solve_delays[attempts]
             attempts += 1
             issued_at = time.time()
             ch = anubis.parse_challenge(html)
             issued_ip = ch["metadata"].get("X-Real-Ip")
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
-            # Anubis rejects "insufficent time" when too little real wall-clock
-            # time passed between issuing the challenge and submitting it (our
-            # pure-Python solve is sub-millisecond). Wait out a human-plausible
-            # minimum, on the SAME keep-alive connection (TCP keep-alive holds the
-            # socket open so the proof isn't invalidated by a reconnect).
-            wait = self._min_solve_seconds - (time.time() - issued_at)
+            # Anubis wants a MINIMUM real time before submit ("insufficent time")
+            # but the challenge/connection also goes stale quickly ("invalid
+            # response"), so sweep submit delays and stop at the first accepted.
+            wait = delay - (time.time() - issued_at)
             if wait > 0:
                 self._sleep(wait)
             elapsed_ms = max(1, int((time.time() - issued_at) * 1000))
             log.warning(
-                "anubis: solving id=%s difficulty=%s issued X-Real-Ip=%s "
-                "randomData=%s nonce=%s response=%s elapsed_ms=%s",
-                ch["id"], ch["difficulty"], issued_ip,
-                ch["random_data"], nonce, response_hash, elapsed_ms)
+                "anubis: solving id=%s difficulty=%s delay=%.2f elapsed_ms=%s "
+                "issued X-Real-Ip=%s randomData=%s nonce=%s response=%s",
+                ch["id"], ch["difficulty"], delay, elapsed_ms,
+                issued_ip, ch["random_data"], nonce, response_hash)
             pass_url = anubis.pass_challenge_url(
                 BASE_URL, ch["id"], response_hash, nonce, url, elapsed_ms=elapsed_ms)
             try:
-                # Submit immediately, with NO throttle sleep, so the pass-challenge
-                # rides the SAME keep-alive connection as the challenge fetch.
-                # Anubis binds the challenge to the connection/TLS fingerprint; a
-                # sleep here lets the socket drop and the retry connect with a
-                # different fingerprint, which the server rejects as
-                # "invalid response". Solving is sub-millisecond at difficulty 1.
+                # No throttle: ride the same keep-alive connection as the fetch.
                 self._raw_get(pass_url, throttle=False)  # jar captures auth cookie
             except Exception as exc:
                 resp = getattr(exc, "response", None)
                 status = getattr(resp, "status_code", None)
                 reason = anubis.error_reason(resp.text) if resp is not None else None
-                recheck_ip = self._probe_real_ip(url)
                 import requests as _rq
                 log.warning(
-                    "anubis: pass-challenge REJECTED status=%s reason=%r "
-                    "issued X-Real-Ip=%s recheck X-Real-Ip=%s ip_changed=%s "
+                    "anubis: pass-challenge REJECTED delay=%.2f status=%s reason=%r "
                     "cookies=[%s] requests=%s",
-                    status, reason, issued_ip, recheck_ip,
-                    issued_ip != recheck_ip,
+                    delay, status, reason,
                     ",".join(sorted(self._session.cookies.keys())),
                     getattr(_rq, "__version__", "?"))
-                raise
+                # Try the next delay with a fresh challenge instead of giving up.
+                html = self._raw_get(url)
+                continue
+            log.warning("anubis: PASSED at delay=%.2f (elapsed_ms=%s)", delay, elapsed_ms)
             html = self._raw_get(url)
         if anubis.is_trap(html):
             raise anubis.AnubisError(
