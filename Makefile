@@ -7,17 +7,14 @@ test:
 
 zip:
 	rm -f $(NAME)-$(VERSION).zip
-	cd .. && zip -r csfd-meta/$(NAME)-$(VERSION).zip csfd-meta \
-		-x 'csfd-meta/.git/*' 'csfd-meta/tests/*' 'csfd-meta/.idea/*' \
-		'csfd-meta/docs/*' 'csfd-meta/.superpowers/*' 'csfd-meta/*.zip' \
-		'csfd-meta/requirements-dev.txt' 'csfd-meta/pytest.ini' \
-		'csfd-meta/Makefile' 'csfd-meta/.claude/*' \
-		'csfd-meta/*.iml' '*/__pycache__/*' 'csfd-meta/.pytest_cache/*'
+	git archive --format=zip --prefix=$(NAME)/ -o $(NAME)-$(VERSION).zip HEAD
 
 clean:
 	rm -f $(NAME)-$(VERSION).zip
 
-# Note: Kodi expects the addon id (metadata.csfd) as the top folder inside
-# the zip. If your working dir is named csfd-meta (as in this repo), rename
-# it to metadata.csfd before zipping, or adjust the zip rule to stage the
-# files under a metadata.csfd/ directory. Verify by opening the built zip.
+# Kodi expects the addon id (metadata.csfd) as the top folder inside the
+# zip, even though this working dir is named csfd-meta. `git archive` roots
+# the archive under the --prefix regardless of the working dir name, and
+# .gitattributes export-ignore entries strip non-addon files (tests/, docs/,
+# etc.). Note: git archive packages COMMITTED files only, so `make zip` must
+# be run after committing.

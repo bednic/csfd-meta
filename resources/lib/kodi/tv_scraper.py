@@ -46,7 +46,8 @@ def episode_details(handle, params):
     from csfd.models import CsfdEpisode
     season = int(params.get("season", "1") or 1)
     number = int(params.get("episode", "1") or 1)
-    ep = CsfdEpisode(csfd_id=f.csfd_id, url=f.url, title=f.title or "",
+    episode_id = csfd_episodes._entity_id(url) or f.csfd_id
+    ep = CsfdEpisode(csfd_id=episode_id, url=f.url, title=f.title or "",
                      season=season, episode=number, plot=f.plot)
     li = episode_to_listitem(ep)
     xbmcplugin.setResolvedUrl(handle, True, li)
