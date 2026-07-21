@@ -68,7 +68,7 @@ class CsfdClient:
         # the challenge also goes stale quickly ("invalid response"), so the valid
         # window is narrow. Sweep several submit delays and use the first the
         # server accepts; each is logged so the working value can be pinned.
-        self._solve_delays = solve_delays or [0.3, 0.5, 0.7, 0.9]
+        self._solve_delays = solve_delays or [0.76, 0.80, 0.84, 0.88]
         if session is not None:
             self._session = session
         else:
