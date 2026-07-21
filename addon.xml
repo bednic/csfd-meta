@@ -7,8 +7,8 @@
     <import addon="script.module.beautifulsoup4" version="4.12.2"/>
     <import addon="script.module.certifi" version="2023.7.22"/>
   </requires>
-  <extension point="xbmc.metadata.scraper.movies" library="addon.py" language="cz"/>
-  <extension point="xbmc.metadata.scraper.tvshows" library="addon.py" language="cz"/>
+  <extension point="xbmc.metadata.scraper.movies" library="addon_movie.py" language="cz"/>
+  <extension point="xbmc.metadata.scraper.tvshows" library="addon_tv.py" language="cz"/>
   <extension point="xbmc.addon.metadata">
     <summary lang="en_gb">CSFD.cz metadata scraper</summary>
     <summary lang="cs_cz">Stahovač metadat z CSFD.cz</summary>

@@ -12,9 +12,8 @@ log = logging.getLogger(__name__)
 
 
 def tv_find(handle, params):
-    # Show search reuses the movie find path (same CSFD search page).
-    from .movie_scraper import movie_find
-    movie_find(handle, params)
+    from .movie_scraper import _find
+    _find(handle, params, lambda r: r.is_series)
 
 
 def tv_details(handle, params):

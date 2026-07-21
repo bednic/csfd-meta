@@ -18,12 +18,12 @@ def build_client(settings):
                       min_interval=1.0)
 
 
-def movie_find(handle, params):
+def _find(handle, params, keep):
     settings = Settings()
     client = build_client(settings)
     title = params.get("title", "")
     year = params.get("year")
-    results = [r for r in csfd_search.search(client, title) if not r.is_series]
+    results = [r for r in csfd_search.search(client, title) if keep(r)]
     if year and str(year).isdigit():
         y = int(year)
         results.sort(key=lambda r: 0 if r.year == y else 1)
@@ -32,6 +32,10 @@ def movie_find(handle, params):
         xbmcplugin.addDirectoryItem(handle=handle, url=r.url, listitem=li,
                                     isFolder=True)
     xbmcplugin.endOfDirectory(handle)
+
+
+def movie_find(handle, params):
+    _find(handle, params, lambda r: not r.is_series)
 
 
 def movie_details(handle, params):
