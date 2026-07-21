@@ -12,7 +12,7 @@ zip:
 	git archive --format=zip --prefix=$(NAME)/ -o $(BUILD_DIR)/$(NAME)-$(VERSION).zip HEAD
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -f $(BUILD_DIR)/$(NAME)-$(VERSION).zip
 
 # Kodi expects the addon id (metadata.csfd) as the top folder inside the
 # zip, even though this working dir is named csfd-meta. `git archive` roots
