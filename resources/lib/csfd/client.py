@@ -77,8 +77,9 @@ class CsfdClient:
         if wait > 0:
             self._sleep(wait)
 
-    def _raw_get(self, url):
-        self._throttle()
+    def _raw_get(self, url, throttle=True):
+        if throttle:
+            self._throttle()
         resp = self._session.get(url, headers=_HEADERS, timeout=10)
         resp.raise_for_status()
         self._last_request = time.time()
@@ -110,7 +111,13 @@ class CsfdClient:
             pass_url = anubis.pass_challenge_url(
                 BASE_URL, ch["id"], response_hash, nonce, url)
             try:
-                self._raw_get(pass_url)   # session cookie jar captures the auth cookie
+                # Submit immediately, with NO throttle sleep, so the pass-challenge
+                # rides the SAME keep-alive connection as the challenge fetch.
+                # Anubis binds the challenge to the connection/TLS fingerprint; a
+                # sleep here lets the socket drop and the retry connect with a
+                # different fingerprint, which the server rejects as
+                # "invalid response". Solving is sub-millisecond at difficulty 1.
+                self._raw_get(pass_url, throttle=False)  # jar captures auth cookie
             except Exception as exc:
                 resp = getattr(exc, "response", None)
                 status = getattr(resp, "status_code", None)

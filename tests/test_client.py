@@ -88,6 +88,36 @@ def test_get_solves_anubis_trap_and_returns_real_page():
     assert any("pass-challenge" in u for u in s.calls)
 
 
+def test_pass_challenge_not_throttled_after_challenge_fetch():
+    """The pass-challenge must ride the same connection as the challenge fetch:
+    no throttle sleep between them, or Anubis rejects the changed fingerprint."""
+    timeline = []
+
+    class TimelineSession:
+        def __init__(self):
+            self.passed = False
+        def get(self, url, headers=None, timeout=None):
+            timeline.append(("get", url))
+            if "pass-challenge" in url:
+                self.passed = True
+                return FakeResponse("<html>ok</html>")
+            if not self.passed:
+                ch = {"rules": {"difficulty": 1},
+                      "challenge": {"id": "x", "randomData": "abc", "difficulty": 1}}
+                return FakeResponse(
+                    '<script id="anubis_challenge" type="application/json">'
+                    + _json.dumps(ch) + "</script>")
+            return FakeResponse("<html><h1>Matrix</h1></html>")
+
+    c = CsfdClient(cache_dir=None, session=TimelineSession(), min_interval=2.0,
+                   sleep=lambda n: timeline.append(("sleep", n)))
+    c.get("https://www.csfd.cz/film/1/")
+    events = [kind for kind, _ in timeline]
+    pass_idx = next(i for i, (k, u) in enumerate(timeline)
+                    if k == "get" and "pass-challenge" in u)
+    assert events[pass_idx - 1] == "get"  # the challenge fetch, not a sleep
+
+
 def test_get_raises_when_anubis_never_passes():
     class AlwaysTrap:
         def get(self, url, headers=None, timeout=None):
