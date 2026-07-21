@@ -71,3 +71,19 @@ def search_result_to_listitem(result):
 def nfo_listitem(url):
     """Minimal ListItem carrying a resolved CSFD url for the NfoUrl action."""
     return xbmcgui.ListItem(url, offscreen=True)
+
+
+def episode_to_listitem(ep):
+    """Directory/detail ListItem for one CsfdEpisode."""
+    li = xbmcgui.ListItem(ep.title, offscreen=True)
+    tag = li.getVideoInfoTag()
+    tag.setMediaType("episode")
+    tag.setTitle(ep.title)
+    tag.setSeason(ep.season)
+    tag.setEpisode(ep.episode)
+    if ep.plot:
+        tag.setPlot(ep.plot)
+    if ep.aired:
+        tag.setFirstAired(ep.aired)
+    tag.setUniqueIDs({"csfd": ep.csfd_id}, defaultuniqueid="csfd")
+    return li

@@ -9,9 +9,16 @@ from .tv_scraper import (                                              # noqa: E
     tv_find, tv_details, episode_list, episode_details,
 )
 
+def _details(handle, params):
+    if (params.get("mediatype") == "tvshow"
+            or params.get("content") == "tvshows"):
+        return tv_details(handle, params)
+    return movie_details(handle, params)
+
+
 _DISPATCH = {
     "find": lambda h, p: movie_find(h, p),
-    "getdetails": lambda h, p: movie_details(h, p),
+    "getdetails": _details,
     "NfoUrl": lambda h, p: nfo_url(h, p),
     "getepisodelist": lambda h, p: episode_list(h, p),
     "getepisodedetails": lambda h, p: episode_details(h, p),
