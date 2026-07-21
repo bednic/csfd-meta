@@ -1,10 +1,13 @@
 import hashlib
 import json
+import logging
 import os
 import time
 
 from .urls import BASE_URL
 from . import anubis
+
+log = logging.getLogger(__name__)
 
 _HEADERS = {
     "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -81,16 +84,37 @@ class CsfdClient:
         self._last_request = time.time()
         return resp.text
 
+    def _probe_real_ip(self, url):
+        """Diagnostic: re-fetch a fresh challenge and return the X-Real-Ip that
+        csfd.cz reports for us right now, to detect whether our source IP
+        changed between challenge issuance and pass-challenge submission."""
+        try:
+            return anubis.parse_challenge(
+                self._raw_get(url))["metadata"].get("X-Real-Ip")
+        except Exception:
+            return None
+
     def _fetch_with_anubis(self, url):
         html = self._raw_get(url)
         attempts = 0
         while anubis.is_trap(html) and attempts < self._max_solve_attempts:
             attempts += 1
             ch = anubis.parse_challenge(html)
+            issued_ip = ch["metadata"].get("X-Real-Ip")
+            log.warning("anubis: solving challenge id=%s difficulty=%s "
+                        "issued X-Real-Ip=%s", ch["id"], ch["difficulty"], issued_ip)
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
             pass_url = anubis.pass_challenge_url(
                 BASE_URL, ch["id"], response_hash, nonce, url)
-            self._raw_get(pass_url)   # session cookie jar captures the auth cookie
+            try:
+                self._raw_get(pass_url)   # session cookie jar captures the auth cookie
+            except Exception as exc:
+                recheck_ip = self._probe_real_ip(url)
+                log.warning(
+                    "anubis: pass-challenge REJECTED (%s); issued X-Real-Ip=%s "
+                    "recheck X-Real-Ip=%s ip_changed=%s",
+                    exc, issued_ip, recheck_ip, issued_ip != recheck_ip)
+                raise
             html = self._raw_get(url)
         if anubis.is_trap(html):
             raise anubis.AnubisError(

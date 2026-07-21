@@ -26,7 +26,8 @@ def test_is_trap_false_for_real_page():
 
 def test_parse_challenge_extracts_fields():
     c = anubis.parse_challenge(TRAP_HTML)
-    assert c == {"id": "test-id-123", "random_data": "deadbeefcafe", "difficulty": 1}
+    assert c == {"id": "test-id-123", "random_data": "deadbeefcafe",
+                 "difficulty": 1, "metadata": {}}
 
 
 def test_solve_produces_hash_meeting_difficulty():

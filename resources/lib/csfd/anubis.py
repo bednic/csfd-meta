@@ -36,6 +36,7 @@ def parse_challenge(html):
             "id": challenge["id"],
             "random_data": challenge["randomData"],
             "difficulty": int(difficulty),
+            "metadata": challenge.get("metadata", {}),
         }
     except (ValueError, KeyError) as e:
         raise AnubisError(f"malformed anubis challenge: {e}")
