@@ -48,7 +48,9 @@ def _keepalive_session():
 
     session = requests.Session()
     try:
-        adapter = _KeepAliveAdapter()
+        # pool of 1 so EVERY request (challenge fetch, warm-up pings, submit)
+        # is forced onto the same TCP/TLS connection -> identical fingerprint.
+        adapter = _KeepAliveAdapter(pool_connections=1, pool_maxsize=1)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
     except Exception:
@@ -58,17 +60,20 @@ def _keepalive_session():
 
 class CsfdClient:
     def __init__(self, cache_dir=None, ttl_seconds=604800, min_interval=1.0,
-                 sleep=time.sleep, session=None, solve_delays=None):
+                 sleep=time.sleep, session=None, solve_delays=None,
+                 now=time.monotonic):
         self._cache_dir = cache_dir
         self._ttl = ttl_seconds
         self._min_interval = min_interval
         self._sleep = sleep
+        self._now = now
         self._last_request = 0.0
-        # Anubis wants a MINIMUM real time before submit ("insufficent time") but
-        # the challenge also goes stale quickly ("invalid response"), so the valid
-        # window is narrow. Sweep several submit delays and use the first the
-        # server accepts; each is logged so the working value can be pinned.
-        self._solve_delays = solve_delays or [0.76, 0.80, 0.84, 0.88]
+        # Wait these many seconds before submitting each attempt, keeping the
+        # connection warm meanwhile so the pass-challenge rides the SAME socket
+        # as the challenge fetch. Both values previously failed "invalid
+        # response" with an idle wait; if warming makes one pass, the wall was a
+        # connection drop, not the device fingerprint.
+        self._solve_delays = solve_delays or [0.90, 1.20]
         if session is not None:
             self._session = session
         else:
@@ -119,23 +124,35 @@ class CsfdClient:
         self._last_request = time.time()
         return resp.text
 
+    def _warm(self, deadline):
+        """Keep the current keep-alive connection busy (and thus open, on the
+        same TCP/TLS fingerprint) until `deadline` by fetching a static Anubis
+        asset, so the pass-challenge reuses the exact connection the challenge
+        was issued on. Response is ignored; failures are swallowed."""
+        ping = BASE_URL + "/.within.website/x/xess/xess.min.css"
+        while self._now() < deadline:
+            try:
+                self._session.get(ping, headers=_HEADERS, timeout=10)
+            except Exception:
+                pass
+            remaining = deadline - self._now()
+            if remaining > 0:
+                self._sleep(min(0.2, remaining))
+
     def _fetch_with_anubis(self, url):
         html = self._raw_get(url)
         attempts = 0
         while anubis.is_trap(html) and attempts < len(self._solve_delays):
             delay = self._solve_delays[attempts]
             attempts += 1
-            issued_at = time.time()
+            issued_at = self._now()
             ch = anubis.parse_challenge(html)
             issued_ip = ch["metadata"].get("X-Real-Ip")
             response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
-            # Anubis wants a MINIMUM real time before submit ("insufficent time")
-            # but the challenge/connection also goes stale quickly ("invalid
-            # response"), so sweep submit delays and stop at the first accepted.
-            wait = delay - (time.time() - issued_at)
-            if wait > 0:
-                self._sleep(wait)
-            elapsed_ms = max(1, int((time.time() - issued_at) * 1000))
+            # Wait out the minimum time WHILE keeping the connection warm, so the
+            # submit rides the same socket/fingerprint as the challenge fetch.
+            self._warm(issued_at + delay)
+            elapsed_ms = max(1, int((self._now() - issued_at) * 1000))
             log.warning(
                 "anubis: solving id=%s difficulty=%s delay=%.2f elapsed_ms=%s "
                 "issued X-Real-Ip=%s randomData=%s nonce=%s response=%s",

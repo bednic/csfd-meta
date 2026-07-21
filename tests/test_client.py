@@ -2,6 +2,17 @@ import time
 from csfd.client import CsfdClient
 
 
+class Clock:
+    """Fake monotonic clock; sleep() advances it so warm-wait loops terminate
+    deterministically without real time passing."""
+    def __init__(self):
+        self.t = 1000.0
+    def now(self):
+        return self.t
+    def sleep(self, n):
+        self.t += max(0.0, n)
+
+
 class FakeResponse:
     def __init__(self, text):
         self.text = text
@@ -82,24 +93,27 @@ class ScriptedAnubisSession:
 
 def test_get_solves_anubis_trap_and_returns_real_page():
     s = ScriptedAnubisSession()
+    clock = Clock()
     c = CsfdClient(cache_dir=None, session=s, min_interval=0,
-                   sleep=lambda n: None)
+                   solve_delays=[0.5], now=clock.now, sleep=clock.sleep)
     html = c.get("https://www.csfd.cz/film/9499/")
     assert "<h1>Matrix</h1>" in html
     assert any("pass-challenge" in u for u in s.calls)
 
 
-def test_pass_challenge_waits_min_solve_time_then_submits():
-    """Anubis rejects "insufficent time" if we submit too fast, and "invalid
-    response" if the connection drops. So the pass-challenge must be preceded by
-    the minimum-solve wait (satisfying the timing gate) and nothing else."""
-    timeline = []
+def test_pass_challenge_warms_connection_before_submit():
+    """The connection must be kept busy during the wait so the pass-challenge
+    rides the same socket as the challenge fetch: warm-up pings should appear
+    before the submit, and the clock should advance by roughly the delay."""
+    gets = []
+    clock = Clock()
 
-    class TimelineSession:
+    class WarmSession:
+        cookies = type("C", (), {"keys": staticmethod(lambda: [])})()
         def __init__(self):
             self.passed = False
         def get(self, url, headers=None, timeout=None):
-            timeline.append(("get", url))
+            gets.append(url)
             if "pass-challenge" in url:
                 self.passed = True
                 return FakeResponse("<html>ok</html>")
@@ -111,14 +125,14 @@ def test_pass_challenge_waits_min_solve_time_then_submits():
                     + _json.dumps(ch) + "</script>")
             return FakeResponse("<html><h1>Matrix</h1></html>")
 
-    c = CsfdClient(cache_dir=None, session=TimelineSession(), min_interval=0,
-                   solve_delays=[0.5],
-                   sleep=lambda n: timeline.append(("sleep", n)))
+    start = clock.now()
+    c = CsfdClient(cache_dir=None, session=WarmSession(), min_interval=0,
+                   solve_delays=[0.6], now=clock.now, sleep=clock.sleep)
     c.get("https://www.csfd.cz/film/1/")
-    pass_idx = next(i for i, (k, u) in enumerate(timeline)
-                    if k == "get" and "pass-challenge" in u)
-    kind, val = timeline[pass_idx - 1]
-    assert kind == "sleep" and val >= 0.4  # the minimum-solve wait, ~0.5s
+    pass_idx = next(i for i, u in enumerate(gets) if "pass-challenge" in u)
+    warm_pings = [u for u in gets[:pass_idx] if "xess" in u]
+    assert warm_pings                       # connection kept warm before submit
+    assert clock.now() - start >= 0.6        # waited out the minimum time
 
 
 def test_solve_sweeps_delays_until_pass_accepted():
@@ -157,8 +171,10 @@ def test_solve_sweeps_delays_until_pass_accepted():
             return FakeResponse("<html><h1>Matrix</h1></html>")
 
     s = SweepSession()
+    clock = Clock()
     c = CsfdClient(cache_dir=None, session=s, min_interval=0,
-                   solve_delays=[0.1, 0.2, 0.3, 0.4], sleep=lambda n: None)
+                   solve_delays=[0.1, 0.2, 0.3, 0.4],
+                   now=clock.now, sleep=clock.sleep)
     html = c.get("https://www.csfd.cz/film/1/")
     assert "<h1>Matrix</h1>" in html
     assert s.pass_attempts == 3
@@ -175,7 +191,8 @@ def test_get_raises_when_anubis_never_passes():
                 '<script id="anubis_challenge" type="application/json">'
                 + _json.dumps(challenge) + "</script>")
     import pytest
+    clock = Clock()
     c = CsfdClient(cache_dir=None, session=AlwaysTrap(), min_interval=0,
-                   solve_delays=[0.1, 0.1], sleep=lambda n: None)
+                   solve_delays=[0.1, 0.1], now=clock.now, sleep=clock.sleep)
     with pytest.raises(_anubis.AnubisError):
         c.get("https://www.csfd.cz/film/1/")
