@@ -100,8 +100,12 @@ already reuses `build_client`).
 - `relay/Dockerfile`: `python:3-slim`, `pip install requests` (its `certifi`
   comes as a dependency; no parsing libs — the relay does not parse HTML). Copy
   `relay/`. `CMD ["python", "app.py"]`.
-- `relay/docker-compose.yml`: port map `9753:9753`, `restart: unless-stopped`.
-  No volume (stateless).
+- `relay/docker-compose.yml`: references the published image
+  `bednic/anubis-relay:latest` (so the NAS pulls, not builds), port map
+  `9753:9753`, `restart: unless-stopped`. No volume (stateless).
+- Published image: `bednic/anubis-relay` on Docker Hub, tagged `latest` and the
+  addon version (e.g. `0.2.0`). Built and pushed from this machine, which is
+  already `docker login`-ed (`docker push` needs no extra auth).
 - `relay/tests/`: `test_app.py`, `test_fetcher.py`, and the relocated
   `test_anubis.py`.
 
@@ -159,8 +163,11 @@ already reuses `build_client`).
   logging, and the `now`-clock plumbing added for it.
 - Move `anubis.py` (and its tests) from the addon to the relay.
 - Version bump (addon `0.2.0`: relay is a breaking change to how it fetches).
-- README: relay build/run on the NAS (docker compose up -d) and setting the
-  addon's Relay URL to `http://nas:9753` (the pre-filled default).
+- Build and push the relay image to Docker Hub as `bednic/anubis-relay`
+  (`latest` + `0.2.0`) from this already-logged-in machine.
+- README: on the NAS, `docker compose up -d` (pulls `bednic/anubis-relay`); set
+  the addon's Relay URL to `http://nas:9753` (the pre-filled default). Also note
+  the maintainer build/push commands for the image.
 
 ## Out of scope
 
