@@ -128,12 +128,32 @@ on a normal-fingerprint, always-on host (e.g. a NAS) and solves Anubis there.
 
 ### Run the relay (on the NAS)
 
+The NAS runs the published `bednic/anubis-relay` image pulled from Docker Hub
+— e.g. add it in Synology **Container Manager**, or with plain Docker. Publish
+port 9753 and set `PORT=9753`. (`docker-compose.yml` is a dev-only file and is
+not used here.)
+
 ```bash
-# uses the published image bednic/anubis-relay
-cd relay
-docker compose up -d
-curl -s http://localhost:9753/health   # -> ok
+docker run -d --name anubis-relay --restart unless-stopped \
+  -p 9753:9753 -e PORT=9753 bednic/anubis-relay:latest
+curl -s http://<nas-host>:9753/health   # -> ok
 ```
+
+### Run the relay for development
+
+`relay/docker-compose.yml` is a developer tool: it builds the relay from the
+local source and bind-mounts your working copy into the container, so you can
+run and debug your changes against the real Anubis wall.
+
+```bash
+cd relay
+docker compose up -d --build           # build once, run the dev container
+curl -s http://localhost:9753/health   # -> ok
+# after editing app.py / fetcher.py / anubis.py:
+docker compose restart                 # picks up source changes (no rebuild)
+```
+
+Rebuild (`--build`) is only needed when `requirements.txt` changes.
 
 ### Point the addon at it
 

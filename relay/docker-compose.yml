@@ -1,9 +1,21 @@
+# Development only. The NAS runs the published `bednic/anubis-relay` image
+# pulled from Docker Hub (via Synology Container Manager) — it does NOT use
+# this file. This compose setup builds the relay from the local source and
+# bind-mounts it into the container so a developer can run and debug their
+# working copy against the real Anubis wall.
 services:
-  anubis-relay:
-    image: bednic/anubis-relay:latest
-    container_name: anubis-relay
-    restart: unless-stopped
+  anubis-relay-dev:
+    build: .
+    container_name: anubis-relay-dev
     ports:
       - "9753:9753"
     environment:
       - PORT=9753
+      - PYTHONUNBUFFERED=1           # stream logs immediately for debugging
+    # Live source: the working copy shadows the code baked into the image, so
+    # edits to *.py apply on `docker compose restart` (no rebuild needed).
+    # Dependencies still come from the built image, so a rebuild is only
+    # needed when requirements.txt changes.
+    volumes:
+      - ./:/app
+    restart: "no"
