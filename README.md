@@ -40,3 +40,32 @@ requests from datacenter/CI IP ranges. The live canary tests need a real
 
 When CSFD changes layout, a canary test fails: re-capture the relevant
 fixture under `tests/fixtures/` and update the selectors until green.
+
+## Anubis relay (required)
+
+csfd.cz is behind the Anubis bot wall, which blocks the Android TV / Kodi TLS
+fingerprint. The addon therefore fetches pages through a small relay that runs
+on a normal-fingerprint, always-on host (e.g. a NAS) and solves Anubis there.
+
+### Run the relay (on the NAS)
+
+```bash
+# uses the published image bednic/anubis-relay
+cd relay
+docker compose up -d
+curl -s http://localhost:9753/health   # -> ok
+```
+
+### Point the addon at it
+
+In the addon settings, set **Anubis relay URL** to `http://<nas-host>:9753`
+(default `http://nas:9753`). Without a reachable relay the addon cannot scrape.
+
+### Build/push the image (maintainer)
+
+```bash
+cd relay
+docker build -t bednic/anubis-relay:latest -t bednic/anubis-relay:0.2.0 .
+docker push bednic/anubis-relay:latest
+docker push bednic/anubis-relay:0.2.0
+```

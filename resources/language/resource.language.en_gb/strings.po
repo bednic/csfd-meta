@@ -21,3 +21,7 @@ msgstr ""
 msgctxt "#30004"
 msgid "Enable debug logging"
 msgstr ""
+
+msgctxt "#30005"
+msgid "Anubis relay URL"
+msgstr ""

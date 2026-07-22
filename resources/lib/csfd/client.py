@@ -1,83 +1,24 @@
 import hashlib
 import json
-import logging
 import os
 import time
-
-from .urls import BASE_URL
-from . import anubis
-
-log = logging.getLogger(__name__)
-
-_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
-    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
-               "image/avif,image/webp,*/*;q=0.8"),
-    "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.7",
-    "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Linux"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Upgrade-Insecure-Requests": "1",
-}
-
-
-def _keepalive_session():
-    """A requests.Session whose sockets have TCP keep-alive enabled, so the
-    connection survives the brief idle wait between fetching an Anubis challenge
-    and submitting it. Anubis binds the challenge to the connection; if the
-    socket drops during the wait the reconnect fails the proof ("invalid
-    response"). Falls back to a plain session if the adapter can't be built."""
-    import socket
-    import requests
-    from requests.adapters import HTTPAdapter
-
-    opts = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
-    for name, value in (("TCP_KEEPIDLE", 1), ("TCP_KEEPINTVL", 1), ("TCP_KEEPCNT", 8)):
-        num = getattr(socket, name, None)
-        if num is not None:
-            opts.append((socket.IPPROTO_TCP, num, value))
-
-    class _KeepAliveAdapter(HTTPAdapter):
-        def init_poolmanager(self, *args, **kwargs):
-            kwargs["socket_options"] = opts
-            return super().init_poolmanager(*args, **kwargs)
-
-    session = requests.Session()
-    try:
-        # pool of 1 so EVERY request (challenge fetch, warm-up pings, submit)
-        # is forced onto the same TCP/TLS connection -> identical fingerprint.
-        adapter = _KeepAliveAdapter(pool_connections=1, pool_maxsize=1)
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
-    except Exception:
-        pass
-    return session
+from urllib.parse import quote
 
 
 class CsfdClient:
-    def __init__(self, cache_dir=None, ttl_seconds=604800, min_interval=1.0,
-                 sleep=time.sleep, session=None, solve_delays=None,
-                 now=time.monotonic):
+    """Fetch csfd.cz HTML through the Anubis relay and cache it. All Anubis
+    solving happens on the relay (the anubis-relay service); the Kodi device
+    cannot pass the wall itself."""
+
+    def __init__(self, relay_url, cache_dir=None, ttl_seconds=604800, session=None):
+        self._relay = (relay_url or "").rstrip("/")
         self._cache_dir = cache_dir
         self._ttl = ttl_seconds
-        self._min_interval = min_interval
-        self._sleep = sleep
-        self._now = now
-        self._last_request = 0.0
-        # Wait these many seconds before submitting each attempt, keeping the
-        # connection warm meanwhile so the pass-challenge rides the SAME socket
-        # as the challenge fetch. Both values previously failed "invalid
-        # response" with an idle wait; if warming makes one pass, the wall was a
-        # connection drop, not the device fingerprint.
-        self._solve_delays = solve_delays or [0.90, 1.20]
         if session is not None:
             self._session = session
         else:
-            self._session = _keepalive_session()
+            import requests
+            self._session = requests.Session()
         if cache_dir:
             os.makedirs(cache_dir, exist_ok=True)
 
@@ -109,86 +50,19 @@ class CsfdClient:
         except OSError:
             pass
 
-    def _throttle(self):
-        if self._min_interval <= 0:
-            return
-        wait = self._min_interval - (time.time() - self._last_request)
-        if wait > 0:
-            self._sleep(wait)
-
-    def _raw_get(self, url, throttle=True):
-        if throttle:
-            self._throttle()
-        resp = self._session.get(url, headers=_HEADERS, timeout=10)
+    def _fetch(self, url):
+        if not self._relay:
+            raise RuntimeError("relay_url is not configured (see addon settings)")
+        full = self._relay + "/fetch?url=" + quote(url, safe="")
+        resp = self._session.get(full, timeout=30)
         resp.raise_for_status()
-        self._last_request = time.time()
         return resp.text
-
-    def _warm(self, deadline):
-        """Keep the current keep-alive connection busy (and thus open, on the
-        same TCP/TLS fingerprint) until `deadline` by fetching a static Anubis
-        asset, so the pass-challenge reuses the exact connection the challenge
-        was issued on. Response is ignored; failures are swallowed."""
-        ping = BASE_URL + "/.within.website/x/xess/xess.min.css"
-        while self._now() < deadline:
-            try:
-                self._session.get(ping, headers=_HEADERS, timeout=10)
-            except Exception:
-                pass
-            remaining = deadline - self._now()
-            if remaining > 0:
-                self._sleep(min(0.2, remaining))
-
-    def _fetch_with_anubis(self, url):
-        html = self._raw_get(url)
-        attempts = 0
-        while anubis.is_trap(html) and attempts < len(self._solve_delays):
-            delay = self._solve_delays[attempts]
-            attempts += 1
-            issued_at = self._now()
-            ch = anubis.parse_challenge(html)
-            issued_ip = ch["metadata"].get("X-Real-Ip")
-            response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
-            # Wait out the minimum time WHILE keeping the connection warm, so the
-            # submit rides the same socket/fingerprint as the challenge fetch.
-            self._warm(issued_at + delay)
-            elapsed_ms = max(1, int((self._now() - issued_at) * 1000))
-            log.warning(
-                "anubis: solving id=%s difficulty=%s delay=%.2f elapsed_ms=%s "
-                "issued X-Real-Ip=%s randomData=%s nonce=%s response=%s",
-                ch["id"], ch["difficulty"], delay, elapsed_ms,
-                issued_ip, ch["random_data"], nonce, response_hash)
-            pass_url = anubis.pass_challenge_url(
-                BASE_URL, ch["id"], response_hash, nonce, url, elapsed_ms=elapsed_ms)
-            try:
-                # No throttle: ride the same keep-alive connection as the fetch.
-                self._raw_get(pass_url, throttle=False)  # jar captures auth cookie
-            except Exception as exc:
-                resp = getattr(exc, "response", None)
-                status = getattr(resp, "status_code", None)
-                reason = anubis.error_reason(resp.text) if resp is not None else None
-                import requests as _rq
-                log.warning(
-                    "anubis: pass-challenge REJECTED delay=%.2f status=%s reason=%r "
-                    "cookies=[%s] requests=%s",
-                    delay, status, reason,
-                    ",".join(sorted(self._session.cookies.keys())),
-                    getattr(_rq, "__version__", "?"))
-                # Try the next delay with a fresh challenge instead of giving up.
-                html = self._raw_get(url)
-                continue
-            log.warning("anubis: PASSED at delay=%.2f (elapsed_ms=%s)", delay, elapsed_ms)
-            html = self._raw_get(url)
-        if anubis.is_trap(html):
-            raise anubis.AnubisError(
-                f"failed to pass Anubis after {attempts} attempts: {url}")
-        return html
 
     def get(self, url, ttl=None):
         ttl = self._ttl if ttl is None else ttl
         cached = self._read_cache(url, ttl)
         if cached is not None:
             return cached
-        html = self._fetch_with_anubis(url)
+        html = self._fetch(url)
         self._write_cache(url, html)
         return html

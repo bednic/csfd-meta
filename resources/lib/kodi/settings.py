@@ -24,6 +24,10 @@ class Settings:
         return self._addon.getSettingBool("debug")
 
     @property
+    def relay_url(self):
+        return self._addon.getSettingString("relay_url")
+
+    @property
     def profile_dir(self):
         path = xbmcvfs.translatePath(self._addon.getAddonInfo("profile"))
         cache = os.path.join(path, "cache")

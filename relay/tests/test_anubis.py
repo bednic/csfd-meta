@@ -1,7 +1,7 @@
 import hashlib
 import json
 import pytest
-from csfd import anubis
+import anubis
 
 CHALLENGE = {
     "rules": {"algorithm": "fast", "difficulty": 1},
