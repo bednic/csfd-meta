@@ -17,7 +17,7 @@
     <description lang="en_GB">Scrapes movie and TV series metadata from CSFD.cz.</description>
     <description lang="cs_CZ">Stahuje metadata filmů a seriálů z CSFD.cz.</description>
     <platform>all</platform>
-    <license>MIT</license>
+    <license>GPL-3.0-or-later</license>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>
