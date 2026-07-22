@@ -100,6 +100,26 @@ requests from datacenter/CI IP ranges. The live canary tests need a real
 When CSFD changes layout, a canary test fails: re-capture the relevant
 fixture under `tests/fixtures/` and update the selectors until green.
 
+## Conventions (required)
+
+These are **rules**, not suggestions:
+
+- **Commits** MUST follow
+  [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification):
+  `type(scope): description` (e.g. `fix(search): …`, `feat(relay): …`,
+  `chore: …`). Use `!` or a `BREAKING CHANGE:` footer for incompatible changes.
+- **Versions** MUST follow
+  [Semantic Versioning 2.0.0](https://semver.org/#semantic-versioning-specification-semver):
+  MAJOR for breaking changes, MINOR for new backward-compatible features,
+  PATCH for backward-compatible bug fixes. A release that adds *any* feature is
+  a MINOR bump even if it also fixes bugs. Version strings are bare
+  (`0.3.0`, no `v` prefix) and must match in `addon.xml`, the `Makefile`, and
+  any git tag.
+- **Addon format/structure** MUST be validated with the official
+  [kodi-addon-checker](https://github.com/xbmc/addon-check)
+  (`kodi-addon-checker --branch omega <addon-dir>`) before building a release
+  zip.
+
 ## Anubis relay (required)
 
 csfd.cz is behind the Anubis bot wall, which blocks the Android TV / Kodi TLS
