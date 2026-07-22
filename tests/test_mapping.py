@@ -55,3 +55,13 @@ def test_search_result_to_listitem():
     assert tag["uniqueids"] == ({"csfd": "42"}, "csfd")
     assert tag["year"] == 1999
     assert li.art["thumb"] == "t.jpg"
+    # year is shown in the visible label to disambiguate same-title matches
+    assert li.label == "Neo (1999)"
+
+
+def test_search_result_label_without_year_is_title_only():
+    from kodi.mapping import search_result_to_listitem
+    from csfd.models import SearchResult
+    r = SearchResult(csfd_id="7", url="u", title="Bez roku", year=None)
+    li = search_result_to_listitem(r)
+    assert li.label == "Bez roku"

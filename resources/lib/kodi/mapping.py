@@ -57,8 +57,16 @@ def film_to_listitem(film, prefer_original, media_type="movie"):
 
 
 def search_result_to_listitem(result):
-    """Directory ListItem for one search candidate."""
-    li = xbmcgui.ListItem(result.title, offscreen=True)
+    """Directory ListItem for one search candidate.
+
+    Kodi's "choose the right match" dialog shows the ListItem label, so append
+    the year — many films/series share a title and only the year tells them
+    apart (e.g. Tom a Jerry 1940 seriál vs 2021 film).
+    """
+    label = result.title or ""
+    if result.year:
+        label = "%s (%d)" % (label, result.year)
+    li = xbmcgui.ListItem(label, offscreen=True)
     tag = li.getVideoInfoTag()
     tag.setUniqueIDs({"csfd": result.csfd_id}, "csfd")
     if result.year:
