@@ -1,11 +1,9 @@
-import logging
+import threading
 import time
 
 import requests
 
 import anubis
-
-log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.csfd.cz"
 
@@ -35,6 +33,7 @@ class AnubisFetcher:
         self._last_request = 0.0
         self._max_attempts = max_attempts
         self._session = session if session is not None else requests.Session()
+        self._lock = threading.Lock()
 
     def _throttle(self):
         if self._min_interval <= 0:
@@ -45,23 +44,25 @@ class AnubisFetcher:
 
     def _raw_get(self, url):
         self._throttle()
-        resp = self._session.get(url, headers=_HEADERS, timeout=15)
+        resp = self._session.get(url, headers=_HEADERS, timeout=15,
+                                 allow_redirects=False)
         resp.raise_for_status()
         self._last_request = time.time()
         return resp.text
 
     def get(self, url):
-        html = self._raw_get(url)
-        attempts = 0
-        while anubis.is_trap(html) and attempts < self._max_attempts:
-            attempts += 1
-            ch = anubis.parse_challenge(html)
-            response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
-            pass_url = anubis.pass_challenge_url(
-                BASE_URL, ch["id"], response_hash, nonce, url)
-            self._raw_get(pass_url)   # session cookie jar captures the auth cookie
+        with self._lock:
             html = self._raw_get(url)
-        if anubis.is_trap(html):
-            raise anubis.AnubisError(
-                "failed to pass Anubis after %d attempts: %s" % (attempts, url))
-        return html
+            attempts = 0
+            while anubis.is_trap(html) and attempts < self._max_attempts:
+                attempts += 1
+                ch = anubis.parse_challenge(html)
+                response_hash, nonce = anubis.solve(ch["random_data"], ch["difficulty"])
+                pass_url = anubis.pass_challenge_url(
+                    BASE_URL, ch["id"], response_hash, nonce, url)
+                self._raw_get(pass_url)   # session cookie jar captures the auth cookie
+                html = self._raw_get(url)
+            if anubis.is_trap(html):
+                raise anubis.AnubisError(
+                    "failed to pass Anubis after %d attempts: %s" % (attempts, url))
+            return html

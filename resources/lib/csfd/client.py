@@ -1,11 +1,8 @@
 import hashlib
 import json
-import logging
 import os
 import time
 from urllib.parse import quote
-
-log = logging.getLogger(__name__)
 
 
 class CsfdClient:

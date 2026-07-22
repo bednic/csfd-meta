@@ -22,7 +22,7 @@ class ScriptedSession:
     def __init__(self):
         self.passed = False
         self.calls = []
-    def get(self, url, headers=None, timeout=None):
+    def get(self, url, headers=None, timeout=None, allow_redirects=None):
         self.calls.append(url)
         if "pass-challenge" in url:
             self.passed = True
@@ -34,10 +34,21 @@ class ScriptedSession:
 
 def test_get_returns_page_directly_when_not_trapped():
     class S:
-        def get(self, url, headers=None, timeout=None):
+        def get(self, url, headers=None, timeout=None, allow_redirects=None):
             return FakeResponse("<html>clean</html>")
     f = AnubisFetcher(min_interval=0, session=S())
     assert f.get("https://www.csfd.cz/film/1/") == "<html>clean</html>"
+
+
+def test_raw_get_disables_redirects():
+    seen = {}
+    class RecordingSession:
+        def get(self, url, headers=None, timeout=None, allow_redirects=None):
+            seen["allow_redirects"] = allow_redirects
+            return FakeResponse("<html>clean</html>")
+    f = AnubisFetcher(min_interval=0, session=RecordingSession())
+    f.get("https://www.csfd.cz/film/1/")
+    assert seen["allow_redirects"] is False
 
 
 def test_get_solves_trap_then_returns_real_page():
@@ -50,7 +61,7 @@ def test_get_solves_trap_then_returns_real_page():
 
 def test_get_raises_when_never_passes():
     class AlwaysTrap:
-        def get(self, url, headers=None, timeout=None):
+        def get(self, url, headers=None, timeout=None, allow_redirects=None):
             if "pass-challenge" in url:
                 return FakeResponse("<html>ok</html>")
             return FakeResponse(_trap())
