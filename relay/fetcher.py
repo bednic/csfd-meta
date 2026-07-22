@@ -7,16 +7,16 @@ import anubis
 
 BASE_URL = "https://www.csfd.cz"
 
+# Deliberately minimal. csfd's Anubis applies a stricter policy (an
+# "insufficent time" minimum-solve-time gate that rejects our immediate submit)
+# when the request carries a full browser-like header set (Accept, Sec-Fetch-*,
+# Upgrade-Insecure-Requests). Sending only User-Agent + Accept-Language lands in
+# the lenient bucket where an immediate pass-challenge is accepted. Verified:
+# full headers -> 403 "insufficent time."; minimal headers -> 302.
 _HEADERS = {
     "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
                    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
-    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
-               "image/avif,image/webp,*/*;q=0.8"),
     "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.7",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Upgrade-Insecure-Requests": "1",
 }
 
 
